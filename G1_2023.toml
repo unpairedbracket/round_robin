@@ -1,0 +1,42 @@
+number_advance = 3
+
+[[block]]
+name = "A"
+competitors = [
+    "Sanada",
+    "Hikuleo",
+    "Yota Tsuji",
+    "Ren Narita",
+    "Shota Umino",
+    "Kaito Kiyomiya",
+    "Gabe Kidd",
+    "Chase Owens",
+]
+
+[[block.nights]]
+wins = [[7, 6], [5, 2], [0, 1]]
+draws = [[4, 3]]
+
+[[block.nights]]
+wins = [[5, 7], [6, 1], [0, 4]]
+draws = [[3, 2]]
+
+[[block.nights]]
+wins = [[6, 3], [7, 1], [0, 2]]
+draws = [[5, 4]]
+
+[[block.nights]]
+wins = [[4, 6], [2, 7], [1, 3], [0, 5]]
+draws = []
+
+[[block.nights]]
+wins = [[4, 7], [1, 2], [0, 3]]
+draws = [[5, 6]]
+
+[[block.nights]]
+wins = [[1, 5], [3, 7], [0, 6], [2, 4]]
+draws = []
+
+[[block.nights]]
+wins = [[2, 6], [3, 5], [0, 7], [1, 4]]
+draws = []

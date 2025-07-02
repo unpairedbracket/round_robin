@@ -1,0 +1,36 @@
+[package]
+name = "round_robin"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+members = ["round_robin_tui"]
+
+[dependencies] 
+indexmap.workspace = true
+log.workspace = true
+ndarray.workspace = true
+toml.workspace = true 
+indicatif.workspace = true
+itertools.workspace = true
+
+clap = "4.5.40"
+clio = "0.3.5"
+petgraph = "0.8.2"
+rayon = "1.10.0"
+serde = { version = "1.0.219", features = ["derive"] }
+
+[workspace.dependencies]
+indicatif = { version = "0.17.11", features = ["rayon"] }
+indexmap = { version = "2.9.0", features = ["serde", "rayon"] }
+itertools = "0.14.0"
+ndarray = "0.16.1"
+toml = "0.8.23"
+log = "0.4.27"
+
+[dev-dependencies]
+criterion = "0.6.0"
+
+[[bench]]
+name = "partitions"
+harness = false

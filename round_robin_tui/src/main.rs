@@ -18,12 +18,8 @@ use indexmap::map::Entry;
 use indicatif::ProgressBar;
 use ratatui::{
     Terminal,
-    backend::{Backend, CrosstermBackend},
-    crossterm::{
-        event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
-        execute,
-        terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-    },
+    backend::Backend,
+    crossterm::event::{self, Event, KeyCode},
 };
 use round_robin::{
     results::MatchResult,
@@ -40,12 +36,8 @@ use crate::{
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // setup terminal
-    enable_raw_mode()?;
-    let mut stderr = io::stderr(); // This is a special case. Normally using stdout is fine
-    execute!(stderr, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stderr);
-    let mut terminal = Terminal::new(backend)?;
+    color_eyre::install()?;
+    let terminal = ratatui::init();
 
     // create app and run it
     let args = TournamentArgs::parse();
@@ -53,21 +45,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .unwrap_or_default()
         .into();
 
-    let res = run_app(&mut terminal, &mut app);
+    let res = run_app(terminal, &mut app);
 
-    // restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    if let Err(err) = res {
-        println!("{err:?}");
-    }
-
+    ratatui::restore();
+    res?;
     Ok(())
 }
 
@@ -76,7 +57,7 @@ fn load_tournament(path: impl AsRef<Path>) -> Option<Tournament> {
     toml::from_str(&contents).ok()?
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<bool> {
+fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<bool> {
     loop {
         terminal.draw(|f| ui(f, app))?;
         let maybe_event = if event::poll(Duration::from_millis(100))? {

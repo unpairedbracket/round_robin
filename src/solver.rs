@@ -1,9 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use indexmap::IndexMap;
-use indicatif::{
-    ParallelProgressIterator as _, ProgressBar, ProgressFinish, ProgressIterator, ProgressStyle,
-};
+use indicatif::{ParallelProgressIterator as _, ProgressBar, ProgressFinish, ProgressStyle};
 use itertools::Itertools;
 use ndarray::{Array1, Axis, Zip, concatenate};
 use rayon::iter::{ParallelBridge, ParallelIterator as _};

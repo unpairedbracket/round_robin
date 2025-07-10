@@ -4,11 +4,11 @@ use std::{
 };
 
 use itertools::Itertools;
-use ndarray::{Array1, Array2, ArrayView2, Axis};
+use ndarray::{Array1, Array2, ArrayView2, Axis, Zip};
 
 use crate::tournament::{Match, MatchSet, TournamentBlock};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MatchResult {
     None,
     Win,
@@ -61,7 +61,7 @@ impl From<&MatchResult> for char {
 
 impl TryFrom<char> for MatchResult {
     fn try_from(value: char) -> Result<Self, ()> {
-        Ok(match value {
+        Ok(match value.to_ascii_lowercase() {
             'o' => MatchResult::None,
             'w' => MatchResult::Win,
             'l' => MatchResult::Loss,
@@ -175,6 +175,13 @@ impl ResultsTable {
             }
         }
     }
+
+    pub fn diff_indices(&self, other: &Self) -> Vec<(usize, usize)> {
+        let inds = Zip::indexed(&self.table)
+            .and(&other.table)
+            .map_collect(|inds, this, that| if this == that { None } else { Some(inds) });
+        inds.into_iter().filter_map(|i| i).collect()
+    }
     pub fn print_diff(&self, to: &mut impl Write, fixed: &Self, long_names: &[String]) {
         let maxlen = long_names.iter().map(String::len).max().unwrap_or(0) + 4;
         let scores = self.scores();
@@ -215,8 +222,12 @@ impl From<&TournamentBlock> for ResultsTable {
 impl AddAssign<&MatchSet> for ResultsTable {
     fn add_assign(&mut self, night: &MatchSet) {
         for (Match(a, b), &result) in night.matches.iter().zip(&night.results) {
-            let a = self.names().iter().position(|n| n == a).unwrap();
-            let b = self.names().iter().position(|n| n == b).unwrap();
+            let Some(a) = self.names().iter().position(|n| n == a) else {
+                continue;
+            };
+            let Some(b) = self.names().iter().position(|n| n == b) else {
+                continue;
+            };
             self.table[(a, b)] = result;
             self.table[(b, a)] = !result;
         }

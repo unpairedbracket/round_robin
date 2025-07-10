@@ -2,12 +2,11 @@ mod analysis;
 mod args;
 mod nights_grid;
 mod results_grid;
+mod terminal_render;
 
 use std::{
     error::Error,
-    fs::read_to_string,
     io, mem,
-    path::Path,
     sync::{Arc, atomic::Ordering},
     thread,
     time::Duration,
@@ -19,11 +18,12 @@ use indicatif::ProgressBar;
 use ratatui::{
     Terminal,
     backend::Backend,
-    crossterm::event::{self, Event, KeyCode},
+    crossterm::event::{self, Event, KeyCode, KeyModifiers},
+    widgets::ListState,
 };
 use round_robin::{
     results::MatchResult,
-    tournament::{Match, MatchSet, Tournament},
+    tournament::{Match, MatchSet, TournamentBlock},
 };
 
 mod app;
@@ -41,20 +41,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // create app and run it
     let args = TournamentArgs::parse();
-    let mut app = load_tournament(args.tournament_file)
-        .unwrap_or_default()
-        .into();
+    let mut app = App::initialise_from_file(args.tournament_file);
 
     let res = run_app(terminal, &mut app);
 
     ratatui::restore();
     res?;
     Ok(())
-}
-
-fn load_tournament(path: impl AsRef<Path>) -> Option<Tournament> {
-    let contents = read_to_string(path).ok()?;
-    toml::from_str(&contents).ok()?
 }
 
 fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<bool> {
@@ -74,50 +67,204 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                 return Ok(true);
             }
 
-            match key.code {
-                KeyCode::Tab => {
-                    app.state.forwards();
-                    continue;
+            let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+            let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+
+            if !matches!(
+                app.state,
+                AppState::BlocksEdit {
+                    editing: Some(_),
+                    ..
+                } | AppState::CompetitorsEdit {
+                    editing: Some(_),
+                    ..
                 }
-                KeyCode::BackTab => {
-                    app.state.backwards();
-                    continue;
+            ) {
+                match key.code {
+                    KeyCode::Tab => {
+                        app.state.forwards();
+                        continue;
+                    }
+                    KeyCode::BackTab => {
+                        app.state.backwards();
+                        continue;
+                    }
+                    KeyCode::Char('b') if ctrl => {
+                        app.selected_block = (app.selected_block + 1) % app.data.block.len();
+                        continue;
+                    }
+                    KeyCode::Char('s') if ctrl => app.save().unwrap(),
+                    _ => {}
                 }
-                _ => {}
             }
+
+            let n_blocks = app.data.block.len();
             let Some(block) = app.data.block.get_mut(app.selected_block) else {
+                if let AppState::BlocksEdit { editing, .. } = &mut app.state {
+                    let mut edit_name = editing.take().unwrap_or("Block Name".into());
+                    match key.code {
+                        KeyCode::Char(c) => {
+                            edit_name.push(c);
+                        }
+                        KeyCode::Backspace => {
+                            edit_name.pop();
+                        }
+
+                        KeyCode::Enter => {
+                            if let Some(existing_block) = app.data.block.get_mut(app.selected_block)
+                            {
+                                existing_block.name = edit_name;
+                            } else {
+                                app.data.block.push(TournamentBlock::empty(edit_name));
+                            }
+                            continue;
+                        }
+                        _ => {}
+                    };
+                    *editing = Some(edit_name);
+                }
                 continue;
             };
             let n_competitors = block.competitors.len();
             match &mut app.state {
-                AppState::BlocksEdit => match key.code {
-                    KeyCode::Down => {
-                        app.selected_block = (app.selected_block + 1) % app.data.block.len()
+                AppState::BlocksEdit {
+                    editing,
+                    delete_warning,
+                } => match editing.take() {
+                    None => match key.code {
+                        KeyCode::Down if !shift => {
+                            *delete_warning = false;
+                            app.selected_block = (app.selected_block + 1) % n_blocks;
+                            continue;
+                        }
+                        KeyCode::Up if !shift => {
+                            *delete_warning = false;
+                            app.selected_block = (app.selected_block + n_blocks - 1) % n_blocks;
+                            continue;
+                        }
+                        KeyCode::Up if shift => {
+                            *delete_warning = false;
+                            if app.selected_block > 0 {
+                                app.data
+                                    .block
+                                    .swap(app.selected_block, app.selected_block - 1);
+                                app.selected_block -= 1;
+                            }
+                        }
+                        KeyCode::Down if shift => {
+                            *delete_warning = false;
+                            if app.data.block.len() < n_blocks - 1 {
+                                app.data
+                                    .block
+                                    .swap(app.selected_block, app.selected_block + 1);
+                                app.selected_block += 1;
+                            }
+                        }
+                        KeyCode::Char('n') if ctrl => {
+                            *delete_warning = false;
+                            app.selected_block = app.data.block.len();
+                            *editing = Some("New Block".to_owned());
+                        }
+
+                        KeyCode::Enter => {
+                            *delete_warning = false;
+                            *editing = Some(block.name.clone());
+                        }
+
+                        KeyCode::Delete | KeyCode::Backspace => {
+                            if *delete_warning {
+                                app.data.block.remove(app.selected_block);
+                                if app.selected_block >= app.data.block.len() {
+                                    app.selected_block = app.data.block.len() - 1;
+                                }
+                                *delete_warning = false;
+                            } else {
+                                *delete_warning = true;
+                            }
+                        }
+                        _ => {}
+                    },
+
+                    Some(mut edit_name) => {
+                        match key.code {
+                            KeyCode::Char(c) => {
+                                edit_name.push(c);
+                            }
+                            KeyCode::Backspace => {
+                                edit_name.pop();
+                            }
+
+                            KeyCode::Enter => {
+                                if let Some(existing_block) =
+                                    app.data.block.get_mut(app.selected_block)
+                                {
+                                    existing_block.name = edit_name;
+                                } else {
+                                    app.data.block.push(TournamentBlock::empty(edit_name));
+                                }
+                                continue;
+                            }
+                            _ => {}
+                        };
+                        *editing = Some(edit_name);
                     }
-                    KeyCode::Up => {
-                        app.selected_block =
-                            (app.selected_block + app.data.block.len() - 1) % app.data.block.len()
-                    }
-                    _ => {}
                 },
                 AppState::CompetitorsEdit {
                     competitor_index,
                     editing,
+                    delete_warning,
                 } => {
                     match editing.take() {
                         None => {
-                            let n_competitors = block.competitors.len();
                             match key.code {
-                                KeyCode::Down => {
+                                KeyCode::Down if !shift => {
+                                    *delete_warning = false;
                                     *competitor_index = (*competitor_index + 1) % n_competitors;
                                     continue;
                                 }
-                                KeyCode::Up => {
+                                KeyCode::Up if !shift => {
+                                    *delete_warning = false;
                                     *competitor_index =
                                         (*competitor_index + n_competitors - 1) % n_competitors;
                                     continue;
                                 }
+                                KeyCode::Up if shift => {
+                                    *delete_warning = false;
+                                    if *competitor_index > 0 {
+                                        block
+                                            .competitors
+                                            .swap_indices(*competitor_index, *competitor_index - 1);
+                                        *competitor_index -= 1;
+                                    }
+                                }
+                                KeyCode::Down if shift => {
+                                    *delete_warning = false;
+                                    if *competitor_index < n_competitors - 1 {
+                                        block
+                                            .competitors
+                                            .swap_indices(*competitor_index, *competitor_index + 1);
+                                        *competitor_index += 1;
+                                    }
+                                }
+
+                                KeyCode::Char('n') if ctrl => {
+                                    *delete_warning = false;
+                                    // let (new_idx, None) = block.competitors.insert_full(
+                                    //     "..".to_owned(),
+                                    //     "New Competitor".to_owned(),
+                                    // ) else {
+                                    //     app.status_message = Some("Error: Cannot create new competitor while a competitor has the short name '..'. This short name is reserved.".into());
+                                    //     continue;
+                                    // };
+                                    *competitor_index = block.competitors.len();
+                                    *editing = Some((
+                                        NameType::LongName,
+                                        ("..".to_owned(), "New Competitor".to_owned()),
+                                    ));
+                                }
+
                                 KeyCode::Enter => {
+                                    *delete_warning = false;
                                     if let Some((short, long)) =
                                         block.competitors.get_index(*competitor_index)
                                     {
@@ -125,6 +272,22 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                                             NameType::LongName,
                                             (short.clone(), long.clone()),
                                         ));
+                                    }
+                                }
+
+                                KeyCode::Delete | KeyCode::Backspace => {
+                                    if *delete_warning {
+                                        if let Some((short, _long)) =
+                                            block.competitors.shift_remove_index(*competitor_index)
+                                        {
+                                            block.remove_competitor(&short);
+                                        }
+                                        if *competitor_index >= block.competitors.len() {
+                                            *competitor_index = block.competitors.len() - 1;
+                                        }
+                                        *delete_warning = false;
+                                    } else {
+                                        *delete_warning = true;
                                     }
                                 }
                                 _ => {}
@@ -165,12 +328,17 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                                             }
                                         }
                                         Entry::Vacant(entry) => {
-                                            entry.insert(long);
-                                            let (old_short, _old_long) = block
-                                                .competitors
-                                                .swap_remove_index(*competitor_index)
-                                                .expect("competitors contains item");
-                                            block.relabel_competitor(&old_short, &short);
+                                            let new_entry = entry.insert_entry(long);
+                                            // If the new index is exactly the competitor index,
+                                            // we're adding a new entry not editing one
+                                            if new_entry.index() > *competitor_index {
+                                                if let Some((old_short, _old_long)) = block
+                                                    .competitors
+                                                    .swap_remove_index(*competitor_index)
+                                                {
+                                                    block.relabel_competitor(&old_short, &short);
+                                                }
+                                            }
                                             *editing = None;
                                             continue;
                                         }
@@ -211,10 +379,20 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                 }
                 AppState::NightsAssign {
                     cursor_position: (x_pos, y_pos),
+                    list_state,
                 } => match key.code {
+                    KeyCode::Up | KeyCode::Down if shift => {
+                        if let KeyCode::Up = key.code {
+                            list_state.select_previous();
+                        } else {
+                            list_state.select_next();
+                        }
+                    }
+
                     KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => {
                         update_cursor_no_diagonal(x_pos, y_pos, key.code, n_competitors);
                     }
+
                     KeyCode::Char('+') | KeyCode::Char('=') => {
                         if let Some((current_night, match_index, _)) =
                             block.find_result_by_indices(*x_pos, *y_pos)
@@ -272,16 +450,86 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                             }
                         }
                     }
+                    KeyCode::Backspace | KeyCode::Delete => {
+                        if let Some((current_night, match_index, _)) =
+                            block.find_result_by_indices(*x_pos, *y_pos)
+                        {
+                            let night = &mut block.nights[current_night];
+                            let _moved_match = night.matches.remove(match_index);
+                            let _moved_result = night.results.remove(match_index);
+                            let should_remove = night.matches.is_empty();
+
+                            if should_remove {
+                                block.nights.remove(current_night);
+                            }
+                        }
+                    }
+                    KeyCode::Char(c) => {
+                        if let Some(digit) = c.to_digit(10) {
+                            let target_night = if digit == 0 { 9 } else { digit as usize - 1 };
+                            if let Some((current_night, match_index, _)) =
+                                block.find_result_by_indices(*x_pos, *y_pos)
+                            {
+                                let night = &mut block.nights[current_night];
+                                let moved_match = night.matches.remove(match_index);
+                                let moved_result = night.results.remove(match_index);
+                                let should_remove = night.matches.is_empty();
+                                let new_night =
+                                    if let Some(night) = block.nights.get_mut(target_night) {
+                                        night
+                                    } else {
+                                        let old_len = block.nights.len();
+                                        block.nights.push(MatchSet::default());
+                                        &mut block.nights[old_len]
+                                    };
+                                new_night.matches.push(moved_match);
+                                new_night.results.push(moved_result);
+                                if should_remove {
+                                    block.nights.remove(current_night);
+                                }
+                            } else {
+                                let Some((a, _)) = block.competitors.get_index(*y_pos) else {
+                                    continue;
+                                };
+                                let Some((b, _)) = block.competitors.get_index(*x_pos) else {
+                                    continue;
+                                };
+                                let moved_match = Match(a.clone(), b.clone());
+                                let moved_result = MatchResult::None;
+                                let new_night =
+                                    if let Some(night) = block.nights.get_mut(target_night) {
+                                        night
+                                    } else {
+                                        let old_len = block.nights.len();
+                                        block.nights.push(MatchSet::default());
+                                        &mut block.nights[old_len]
+                                    };
+                                new_night.matches.push(moved_match);
+                                new_night.results.push(moved_result);
+                            }
+                        }
+                    }
                     _ => {}
                 },
                 AppState::ResultsEdit {
                     cursor_position: (x_pos, y_pos),
+                    list_state,
                 } => match key.code {
+                    KeyCode::Up | KeyCode::Down if shift => {
+                        if let KeyCode::Up = key.code {
+                            list_state.select_previous();
+                        } else {
+                            list_state.select_next();
+                        }
+                    }
                     KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => {
                         update_cursor_no_diagonal(x_pos, y_pos, key.code, n_competitors);
                     }
                     KeyCode::Char(c) => {
                         if let Ok(result) = MatchResult::try_from(c) {
+                            if matches!(result, MatchResult::SelfMatch) {
+                                continue;
+                            }
                             let Some((night, match_number, swapped)) =
                                 block.find_result_by_indices(*y_pos, *x_pos)
                             else {
@@ -308,7 +556,7 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                 },
                 AppState::Analysis { results } => match key.code {
                     KeyCode::Enter => match results {
-                        AnalysisState::NoAnalysis | AnalysisState::Complete { .. } => {
+                        AnalysisState::Display { .. } => {
                             let state = Arc::new(ThreadState::default());
                             let n_winners = app.data.number_advance;
                             let block = block.clone();
@@ -317,9 +565,8 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                                 let state = state.clone();
                                 let bar = progress_bar.clone();
                                 thread::spawn(move || {
-                                    let answer = analysis::analyse_tournament_bfs(
-                                        block, n_winners, &state, bar,
-                                    );
+                                    let answer =
+                                        analysis::analyse_tournament(block, n_winners, &state, bar);
                                     state.done.store(true, Ordering::Relaxed);
                                     answer
                                 })
@@ -335,129 +582,57 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                         }
                     },
                     KeyCode::Right => {
-                        if let AnalysisState::Complete { night_number, .. } = results {
-                            let n_nights = block
-                                .nights
-                                .iter()
-                                .enumerate()
-                                .filter(|(_, night)| !night.skip)
-                                .count();
+                        if let AnalysisState::Display {
+                            night_number,
+                            list_state,
+                        } = results
+                        {
+                            let n_nights = block.nights.len();
                             *night_number = night_number.saturating_add(1).clamp(0, n_nights - 1);
+                            list_state.select(None);
                         }
                     }
                     KeyCode::Left => {
-                        if let AnalysisState::Complete { night_number, .. } = results {
+                        if let AnalysisState::Display {
+                            night_number,
+                            list_state,
+                        } = results
+                        {
                             *night_number = night_number.saturating_sub(1);
+                            list_state.select(None);
                         }
                     }
                     KeyCode::Down => {
-                        if let AnalysisState::Complete {
-                            scroll_position, ..
-                        } = results
-                        {
-                            *scroll_position = scroll_position.saturating_add(1);
+                        if let AnalysisState::Display { list_state, .. } = results {
+                            list_state.select_next();
                         }
                     }
                     KeyCode::Up => {
-                        if let AnalysisState::Complete {
-                            scroll_position, ..
-                        } = results
-                        {
-                            *scroll_position = scroll_position.saturating_sub(1);
+                        if let AnalysisState::Display { list_state, .. } = results {
+                            list_state.select_previous();
                         }
                     }
                     _ => {}
                 },
             };
-            // match app.current_screen {
-            //     CurrentScreen::Main => match key.code {
-            //         KeyCode::Char('e') => {
-            //             app.current_screen = CurrentScreen::Editing;
-            //             app.currently_editing = Some(CurrentlyEditing::Key);
-            //         }
-            //         KeyCode::Char('q') => {
-            //             app.current_screen = CurrentScreen::Exiting;
-            //         }
-            //         _ => {}
-            //     },
-            //     CurrentScreen::Exiting => match key.code {
-            //         KeyCode::Char('y') => {
-            //             return Ok(true);
-            //         }
-            //         KeyCode::Char('n') | KeyCode::Char('q') => {
-            //             return Ok(false);
-            //         }
-            //         _ => {}
-            //     },
-            //     CurrentScreen::Editing if key.kind == KeyEventKind::Press => match key.code {
-            //         KeyCode::Enter => {
-            //             if let Some(editing) = &app.currently_editing {
-            //                 match editing {
-            //                     CurrentlyEditing::Key => {
-            //                         app.currently_editing = Some(CurrentlyEditing::Value);
-            //                     }
-            //                     CurrentlyEditing::Value => {
-            //                         app.save_key_value();
-            //                         app.current_screen = CurrentScreen::Main;
-            //                     }
-            //                 }
-            //             }
-            //         }
-            //         KeyCode::Backspace => {
-            //             if let Some(editing) = &app.currently_editing {
-            //                 match editing {
-            //                     CurrentlyEditing::Key => {
-            //                         app.key_input.pop();
-            //                     }
-            //                     CurrentlyEditing::Value => {
-            //                         app.value_input.pop();
-            //                     }
-            //                 }
-            //             }
-            //         }
-            //         KeyCode::Esc => {
-            //             app.current_screen = CurrentScreen::Main;
-            //             app.currently_editing = None;
-            //         }
-            //         KeyCode::Tab => {
-            //             app.toggle_editing();
-            //         }
-            //         KeyCode::Char(value) => {
-            //             if let Some(editing) = &app.currently_editing {
-            //                 match editing {
-            //                     CurrentlyEditing::Key => {
-            //                         app.key_input.push(value);
-            //                     }
-            //                     CurrentlyEditing::Value => {
-            //                         app.value_input.push(value);
-            //                     }
-            //                 }
-            //             }
-            //         }
-            //         _ => {}
-            //     },
-            //     _ => {}
-            // }
         }
+
         if let AppState::Analysis { results } = &mut app.state {
             if let AnalysisState::Analysing { state, .. } = results
                 && state.done.load(Ordering::Relaxed)
             {
-                let mut results_state = AnalysisState::NoAnalysis;
+                let mut results_state = AnalysisState::Display {
+                    night_number: 0,
+                    list_state: ListState::default(),
+                };
                 mem::swap(results, &mut results_state);
                 let AnalysisState::Analysing { handle, .. } = results_state else {
                     panic!()
                 };
                 let result = handle.join().unwrap();
 
-                *results = if let Some(analysis) = result {
-                    AnalysisState::Complete {
-                        analysis,
-                        scroll_position: 0,
-                        night_number: 0,
-                    }
-                } else {
-                    AnalysisState::NoAnalysis
+                if let Some((block_name, analysis)) = result {
+                    app.analysis_results.insert(block_name, analysis);
                 };
             }
         }

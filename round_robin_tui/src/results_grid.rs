@@ -10,9 +10,9 @@ use ratatui::{
 use round_robin::results::{MatchResult, ResultsTable};
 
 pub struct ResultsGrid<'a> {
-    pub results: ResultsTable,
+    pub results: &'a ResultsTable,
     pub competitors: &'a IndexMap<String, String>,
-    pub position: (usize, usize),
+    pub positions: &'a [(usize, usize)],
 }
 
 impl Widget for ResultsGrid<'_> {
@@ -52,7 +52,7 @@ impl Widget for ResultsGrid<'_> {
 
                 for (idx_x, (&cell, result)) in it.zip(table.row(idx - 1)).enumerate() {
                     result
-                        .render((idx_x, idx) == self.position)
+                        .render(self.positions.contains(&(idx_x, idx - 1)))
                         .render(cell, buf);
                 }
                 let score_cell = cells.last().unwrap();

@@ -34,7 +34,20 @@ pub struct MatchSet {
     pub results: Vec<MatchResult>,
 }
 
+impl MatchSet {
+    pub fn future(&self) -> bool {
+        self.results.is_empty() | self.results.iter().all(|r| matches!(r, MatchResult::None))
+    }
+}
+
 impl TournamentBlock {
+    pub fn up_to_night(&self, final_night: usize) -> TournamentBlock {
+        let nights = self.nights[..=final_night].iter().cloned().collect();
+        TournamentBlock {
+            nights,
+            ..self.clone()
+        }
+    }
     pub fn relabel_competitor(&mut self, old_short_name: &str, new_short_name: &str) {
         for night in &mut self.nights {
             for Match(a, b) in &mut night.matches {
@@ -47,10 +60,34 @@ impl TournamentBlock {
             }
         }
     }
+
+    pub fn remove_competitor(&mut self, short_name: &str) {
+        for night in &mut self.nights {
+            night.results = night
+                .results
+                .iter()
+                .zip(&night.matches)
+                .filter_map(|(&r, m)| {
+                    if m.contains(short_name) {
+                        None
+                    } else {
+                        Some(r)
+                    }
+                })
+                .collect();
+            night.matches.retain(|m| !m.contains(short_name));
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Match(pub String, pub String);
+
+impl Match {
+    pub fn contains(&self, name: &str) -> bool {
+        &self.0 == name || &self.1 == name
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -89,6 +126,13 @@ impl<'de> Deserialize<'de> for MatchResult {
 }
 
 impl TournamentBlock {
+    pub fn empty(title: impl ToString) -> TournamentBlock {
+        TournamentBlock {
+            name: title.to_string(),
+            competitors: Default::default(),
+            nights: Default::default(),
+        }
+    }
     pub fn find_result(&self, first: &str, second: &str) -> Option<(usize, usize, bool)> {
         for (night_id, night) in &mut self.nights.iter().enumerate() {
             for (match_id, Match(a, b)) in night.matches.iter().enumerate() {

@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -9,12 +8,14 @@ use ratatui::{
 use round_robin::results::ResultsTable;
 
 use crate::{
+    analysis::NightAnalysis,
     app::{AnalysisState, App, AppState, NameType},
     nights_grid::NightsGrid,
     results_grid::ResultsGrid,
+    terminal_render::TerminalRenderBlock as _,
 };
 
-pub fn ui(frame: &mut Frame, app: &App) {
+pub fn ui(frame: &mut Frame, app: &mut App) {
     // Create the layout sections.
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -25,6 +26,9 @@ pub fn ui(frame: &mut Frame, app: &App) {
         ])
         .split(frame.area());
 
+    let title_chunks = Layout::horizontal([Constraint::Percentage(80), Constraint::Percentage(20)])
+        .split(chunks[0]);
+
     let title_block = Block::default()
         .borders(Borders::ALL)
         .style(Style::default());
@@ -34,30 +38,60 @@ pub fn ui(frame: &mut Frame, app: &App) {
     let title = Paragraph::new(Text::styled(title_text, Style::default().fg(Color::Green)))
         .block(title_block);
 
-    frame.render_widget(title, chunks[0]);
+    frame.render_widget(title, title_chunks[0]);
 
-    let active_block = &app.data.block[app.selected_block];
-    match &app.state {
-        AppState::BlocksEdit => {
-            let mut list_items = Vec::<ListItem>::new();
+    let active_block_name = if let AppState::BlocksEdit {
+        editing: Some(current_name),
+        ..
+    } = &app.state
+    {
+        current_name
+    } else {
+        let active_block = &app.data.block[app.selected_block];
+        &active_block.name
+    };
 
-            for (idx, block) in app.data.block.iter().enumerate() {
-                let style = if idx == app.selected_block {
-                    Style::default().bg(Color::LightGreen)
-                } else {
-                    Style::default()
-                };
-                list_items.push(ListItem::new(Line::styled(&block.name, style)));
+    let block_widget = Paragraph::new(
+        Span::from(format!("Current Block: {}", active_block_name)).into_centered_line(),
+    )
+    .block(Block::bordered());
+
+    frame.render_widget(block_widget, title_chunks[1]);
+    match &mut app.state {
+        AppState::BlocksEdit { editing, .. } => match editing {
+            None => {
+                let mut list_items = Vec::<ListItem>::new();
+
+                for (idx, block) in app.data.block.iter().enumerate() {
+                    let style = if idx == app.selected_block {
+                        Style::default().bg(Color::LightGreen)
+                    } else {
+                        Style::default()
+                    };
+                    list_items.push(ListItem::new(Line::styled(&block.name, style)));
+                }
+                let list = List::new(list_items);
+
+                frame.render_widget(list, chunks[1]);
             }
-            let list = List::new(list_items);
+            Some(block_name) => {
+                let popup_block = Block::default()
+                    .title("Edit Block Name")
+                    .borders(Borders::ALL)
+                    .style(Style::default().bg(Color::DarkGray));
+                let short_name_text = Paragraph::new(block_name.clone()).block(popup_block);
 
-            frame.render_widget(list, chunks[1]);
-        }
+                let area = centered_rect(60, 25, frame.area());
+                frame.render_widget(short_name_text, area);
+            }
+        },
         AppState::CompetitorsEdit {
             competitor_index,
             editing,
+            ..
         } => match editing {
             None => {
+                let active_block = &app.data.block[app.selected_block];
                 let mut list_items = Vec::<ListItem>::new();
 
                 let longest_short = active_block
@@ -65,7 +99,7 @@ pub fn ui(frame: &mut Frame, app: &App) {
                     .iter()
                     .map(|(short, _)| short.len())
                     .max()
-                    .unwrap()
+                    .unwrap_or(0)
                     + 4;
 
                 for (idx, (short_name, long_name)) in active_block.competitors.iter().enumerate() {
@@ -117,7 +151,9 @@ pub fn ui(frame: &mut Frame, app: &App) {
         },
         AppState::NightsAssign {
             cursor_position: (x, y),
+            list_state,
         } => {
+            let active_block = &app.data.block[app.selected_block];
             let main_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -126,37 +162,121 @@ pub fn ui(frame: &mut Frame, app: &App) {
                 block: &active_block,
                 position: (*x, *y + 1),
             };
-            frame.render_widget(
-                Paragraph::new(format!("{:#?}", active_block.nights)).block(Block::bordered()),
+            frame.render_stateful_widget(
+                List::new(active_block.render_matches())
+                    .block(Block::bordered())
+                    .highlight_symbol("> "),
                 main_chunks[0],
+                list_state,
             );
             frame.render_widget(grid, main_chunks[1]);
         }
         AppState::ResultsEdit {
             cursor_position: (x, y),
+            list_state,
         } => {
+            let active_block = &app.data.block[app.selected_block];
             let main_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(chunks[1]);
             let results_table = ResultsTable::from(active_block);
             let grid = ResultsGrid {
-                results: results_table,
+                results: &results_table,
                 competitors: &active_block.competitors,
-                position: (*x, *y + 1),
+                positions: &[(*x, *y)],
             };
-            frame.render_widget(
-                Paragraph::new(format!("{:#?}", active_block.nights)).block(Block::bordered()),
+            frame.render_stateful_widget(
+                List::new(active_block.render_results())
+                    .block(Block::bordered())
+                    .highlight_symbol("> "),
                 main_chunks[0],
+                list_state,
             );
             frame.render_widget(grid, main_chunks[1]);
         }
         AppState::Analysis { results } => match results {
-            AnalysisState::NoAnalysis => {
-                let instructions = Paragraph::new("Press Enter to run Analysis")
-                    .centered()
-                    .block(Block::bordered().border_type(BorderType::Rounded));
-                frame.render_widget(instructions, chunks[1]);
+            AnalysisState::Display {
+                night_number,
+                list_state,
+            } => {
+                let active_block = &app.data.block[app.selected_block];
+                if let Some(analysis) = app.analysis_results.get(&active_block.name) {
+                    let long_names: Vec<_> = active_block.competitors.values().cloned().collect();
+                    let mut possible_results: Vec<Text> = Vec::new();
+                    analysis.print_night(&mut possible_results, *night_number, &long_names);
+
+                    // let output = List::new(items)
+                    //     .highlight_symbol("> ")
+                    //     .repeat_highlight_symbol(true)
+                    //     .block(Block::bordered().border_type(BorderType::Rounded));
+                    // frame.render_stateful_widget(output, chunks[1], list_state);
+                    // let max_width = active_block
+                    //     .competitors
+                    //     .values()
+                    //     .map(|n| n.len() as u16)
+                    //     .max()
+                    //     .unwrap_or(3);
+                    // let rows = active_block.competitors.values().map(|name| {
+                    //     let cells = std::iter::once(Line::from(name as &str).right_aligned())
+                    //         .chain(
+                    //             (0..app.data.number_advance)
+                    //                 .map(|n| Line::from(format!("{n}")).centered().underlined()),
+                    //         );
+                    //     Row::from_iter(cells)
+                    // });
+
+                    // let widths = std::iter::once(Constraint::Length(max_width))
+                    //     .chain((0..app.data.number_advance).map(|_| Constraint::Length(3)));
+                    // let table = Table::new(rows, widths).block(
+                    //     Block::bordered()
+                    //         .border_type(BorderType::Rounded)
+                    //         .title(format!("--- After night {} ---\n", *night_number + 1)),
+                    // );
+
+                    let main_chunks = Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                        .split(chunks[1]);
+                    frame.render_stateful_widget(
+                        List::new(possible_results)
+                            .block(
+                                Block::bordered()
+                                    .border_type(BorderType::Rounded)
+                                    .title(format!("After night {}", 1 + *night_number)),
+                            )
+                            .highlight_symbol("> ")
+                            .repeat_highlight_symbol(true),
+                        main_chunks[0],
+                        list_state,
+                    );
+                    let results_table =
+                        ResultsTable::from(&active_block.up_to_night(*night_number));
+                    let new_results_table = if let Some(selected) = list_state.selected() {
+                        let night_analysis = &analysis.0[*night_number];
+                        if let NightAnalysis::Analysis(night_analysis) = &night_analysis {
+                            let (_, results_table) = &night_analysis[selected];
+                            results_table
+                        } else {
+                            &results_table
+                        }
+                    } else {
+                        &results_table
+                    };
+                    let different_positions = results_table.diff_indices(new_results_table);
+                    let grid = ResultsGrid {
+                        results: new_results_table,
+                        competitors: &active_block.competitors,
+                        positions: &different_positions,
+                    };
+
+                    frame.render_widget(grid, main_chunks[1]);
+                } else {
+                    let instructions = Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .title("Press Enter to run Analysis");
+                    frame.render_widget(instructions, chunks[1]);
+                }
             }
             AnalysisState::Analysing { progress_bar, .. } => {
                 if let Some(total) = progress_bar.length()
@@ -172,110 +292,34 @@ pub fn ui(frame: &mut Frame, app: &App) {
                     frame.render_widget(g, progress_chunks[0]);
                 }
             }
-            AnalysisState::Complete {
-                analysis,
-                scroll_position,
-                night_number,
-            } => {
-                let long_names: Vec<_> = active_block.competitors.values().cloned().collect();
-                let results_table = ResultsTable::from(active_block);
-                if let Some((night_idx, night)) = active_block
-                    .nights
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, night)| !night.skip)
-                    .nth(*night_number)
-                {
-                    let mut night_text = format!("--- After night {} ---\n", night_idx + 1);
-                    analysis.print_night(
-                        &mut night_text,
-                        *night_number,
-                        night,
-                        &long_names,
-                        results_table,
-                        app.data.number_advance,
-                    );
-                    let output = Paragraph::new(night_text)
-                        .block(Block::bordered().border_type(BorderType::Rounded))
-                        .scroll((*scroll_position as u16, 0));
-                    frame.render_widget(output, chunks[1]);
-                }
-            }
         },
     }
 
     // -------------------------------------------------------------------------------------
 
-    let current_keys_hint = Span::styled("(q) to quit", Style::default().fg(Color::Red));
+    let current_keys_hint = Span::styled(
+        "(q) Quit | (ctrl+s) Save file | (ctrl+b) Cycle block",
+        Style::default().fg(Color::Red),
+    );
 
-    let key_notes_footer =
-        Paragraph::new(Line::from(current_keys_hint)).block(Block::default().borders(Borders::ALL));
+    let key_notes_footer = Paragraph::new(Line::from(current_keys_hint).centered())
+        .block(Block::default().borders(Borders::ALL));
 
     let footer_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
+        .constraints([Constraint::Fill(1), Constraint::Length(56)])
         .split(chunks[2]);
 
     let statusline_footer = Paragraph::new(Line::from(Span::styled(
-        app.status_message.as_deref().unwrap_or(""),
+        app.status_message
+            .as_deref()
+            .unwrap_or(app.state.instructions()),
         Style::default().fg(Color::Yellow),
     )))
     .block(Block::default().borders(Borders::ALL));
     frame.render_widget(statusline_footer, footer_chunks[0]);
 
     frame.render_widget(key_notes_footer, footer_chunks[1]);
-
-    // if let Some(editing) = &app.currently_editing {
-    //     let popup_block = Block::default()
-    //         .title("Enter a new key-value pair")
-    //         .borders(Borders::NONE)
-    //         .style(Style::default().bg(Color::DarkGray));
-
-    //     let area = centered_rect(60, 25, frame.area());
-    //     frame.render_widget(popup_block, area);
-
-    //     let popup_chunks = Layout::default()
-    //         .direction(Direction::Horizontal)
-    //         .margin(1)
-    //         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-    //         .split(area);
-
-    //     let mut key_block = Block::default().title("Key").borders(Borders::ALL);
-    //     let mut value_block = Block::default().title("Value").borders(Borders::ALL);
-
-    //     let active_style = Style::default().bg(Color::LightYellow).fg(Color::Black);
-
-    //     match editing {
-    //         CurrentlyEditing::Key => key_block = key_block.style(active_style),
-    //         CurrentlyEditing::Value => value_block = value_block.style(active_style),
-    //     };
-
-    //     let key_text = Paragraph::new(app.key_input.clone()).block(key_block);
-    //     frame.render_widget(key_text, popup_chunks[0]);
-
-    //     let value_text = Paragraph::new(app.value_input.clone()).block(value_block);
-    //     frame.render_widget(value_text, popup_chunks[1]);
-    // }
-
-    // if let CurrentScreen::Exiting = app.current_screen {
-    //     frame.render_widget(Clear, frame.area()); //this clears the entire screen and anything already drawn
-    //     let popup_block = Block::default()
-    //         .title("Y/N")
-    //         .borders(Borders::NONE)
-    //         .style(Style::default().bg(Color::DarkGray));
-
-    //     let exit_text = Text::styled(
-    //         "Would you like to output the buffer as json? (y/n)",
-    //         Style::default().fg(Color::Red),
-    //     );
-    //     // the `trim: false` will stop the text from being cut off when over the edge of the block
-    //     let exit_paragraph = Paragraph::new(exit_text)
-    //         .block(popup_block)
-    //         .wrap(Wrap { trim: false });
-
-    //     let area = centered_rect(60, 25, frame.area());
-    //     frame.render_widget(exit_paragraph, area);
-    // }
 }
 
 /// helper function to create a centered rect using up certain percentage of the available rect `r`

@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders, Gauge, List, ListItem, Paragraph},
+    widgets::{Block, BorderType, Borders, Gauge, List, ListItem, ListState, Paragraph},
 };
 use round_robin::results::ResultsTable;
 
@@ -62,17 +62,15 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
             None => {
                 let mut list_items = Vec::<ListItem>::new();
 
-                for (idx, block) in app.data.block.iter().enumerate() {
-                    let style = if idx == app.selected_block {
-                        Style::default().bg(Color::LightGreen)
-                    } else {
-                        Style::default()
-                    };
-                    list_items.push(ListItem::new(Line::styled(&block.name, style)));
+                for block in app.data.block.iter() {
+                    list_items.push(ListItem::new(Span::from(&block.name)));
                 }
-                let list = List::new(list_items);
+                let list = List::new(list_items)
+                    .block(Block::bordered())
+                    .highlight_style(Style::new().bg(Color::DarkGray));
+                let mut state = ListState::default().with_selected(Some(app.selected_block));
 
-                frame.render_widget(list, chunks[1]);
+                frame.render_stateful_widget(list, chunks[1], &mut state);
             }
             Some(block_name) => {
                 let popup_block = Block::default()
@@ -104,7 +102,7 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
 
                 for (idx, (short_name, long_name)) in active_block.competitors.iter().enumerate() {
                     let style = if idx == *competitor_index {
-                        Style::default().bg(Color::LightGreen)
+                        Style::default().bg(Color::DarkGray)
                     } else {
                         Style::default()
                     };
@@ -135,7 +133,7 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
                 let mut short_block = Block::default().title("Short Name").borders(Borders::NONE);
                 let mut long_block = Block::default().title("Long Name").borders(Borders::NONE);
 
-                let active_style = Style::default().bg(Color::LightYellow).fg(Color::Black);
+                let active_style = Style::default().bg(Color::DarkGray);
 
                 match name {
                     NameType::ShortName => short_block = short_block.style(active_style),

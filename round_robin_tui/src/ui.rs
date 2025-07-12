@@ -204,35 +204,8 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
                 if let Some(analysis) = app.analysis_results.get(&active_block.name) {
                     let long_names: Vec<_> = active_block.competitors.values().cloned().collect();
                     let mut possible_results: Vec<Text> = Vec::new();
-                    analysis.print_night(&mut possible_results, *night_number, &long_names);
-
-                    // let output = List::new(items)
-                    //     .highlight_symbol("> ")
-                    //     .repeat_highlight_symbol(true)
-                    //     .block(Block::bordered().border_type(BorderType::Rounded));
-                    // frame.render_stateful_widget(output, chunks[1], list_state);
-                    // let max_width = active_block
-                    //     .competitors
-                    //     .values()
-                    //     .map(|n| n.len() as u16)
-                    //     .max()
-                    //     .unwrap_or(3);
-                    // let rows = active_block.competitors.values().map(|name| {
-                    //     let cells = std::iter::once(Line::from(name as &str).right_aligned())
-                    //         .chain(
-                    //             (0..app.data.number_advance)
-                    //                 .map(|n| Line::from(format!("{n}")).centered().underlined()),
-                    //         );
-                    //     Row::from_iter(cells)
-                    // });
-
-                    // let widths = std::iter::once(Constraint::Length(max_width))
-                    //     .chain((0..app.data.number_advance).map(|_| Constraint::Length(3)));
-                    // let table = Table::new(rows, widths).block(
-                    //     Block::bordered()
-                    //         .border_type(BorderType::Rounded)
-                    //         .title(format!("--- After night {} ---\n", *night_number + 1)),
-                    // );
+                    let night_analysis = &analysis.0[*night_number];
+                    night_analysis.print_night(&mut possible_results, &long_names);
 
                     let main_chunks = Layout::default()
                         .direction(Direction::Horizontal)
@@ -240,20 +213,21 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
                         .split(chunks[1]);
                     frame.render_stateful_widget(
                         List::new(possible_results)
-                            .block(
-                                Block::bordered()
-                                    .border_type(BorderType::Rounded)
-                                    .title(format!("After night {}", 1 + *night_number)),
-                            )
-                            .highlight_symbol("> ")
-                            .repeat_highlight_symbol(true),
+                            .block(Block::bordered().border_type(BorderType::Rounded).title(
+                                format!(
+                                    "After night {}: {}",
+                                    1 + *night_number,
+                                    night_analysis.summary()
+                                ),
+                            ))
+                            .highlight_style(Style::default().bg(Color::DarkGray)),
                         main_chunks[0],
                         list_state,
                     );
+
                     let results_table =
                         ResultsTable::from(&active_block.up_to_night(*night_number));
                     let new_results_table = if let Some(selected) = list_state.selected() {
-                        let night_analysis = &analysis.0[*night_number];
                         if let NightAnalysis::Analysis(night_analysis) = &night_analysis {
                             let (_, results_table) = &night_analysis[selected];
                             results_table

@@ -612,6 +612,11 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                             list_state.select_previous();
                         }
                     }
+                    KeyCode::Delete | KeyCode::Backspace => {
+                        if let AnalysisState::Display { list_state, .. } = results {
+                            list_state.select(None);
+                        }
+                    }
                     _ => {}
                 },
             };

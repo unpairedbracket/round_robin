@@ -2,7 +2,11 @@ use std::sync::atomic::AtomicBool;
 
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
-use ratatui::text::Text;
+use itertools::Itertools;
+use ratatui::{
+    style::Color,
+    text::{Line, Span, Text},
+};
 use round_robin::{
     results::ResultsTable, solver::analyse_state_progress, tournament::TournamentBlock,
 };
@@ -45,23 +49,26 @@ pub fn analyse_tournament(
         } else if night.future() {
             NightAnalysis::Future
         } else {
-            NightAnalysis::Analysis(analyse_state_progress(
-                &r,
-                n_winners,
-                progress_bar.clone(),
-                &state.done,
-            ))
+            let mut night =
+                analyse_state_progress(&r, n_winners, progress_bar.clone(), &state.done);
+            night.sort_unstable_keys();
+            NightAnalysis::Analysis(night)
         };
         all_results.push(possible_results);
     }
     Some((block.name, BlockAnalysis(all_results)))
 }
 
-impl BlockAnalysis {
-    pub fn print_night(&self, lines: &mut Vec<Text>, night_idx: usize, names: &[String]) {
-        let results = &self.0[night_idx];
-
-        match results {
+impl NightAnalysis {
+    pub fn summary(&self) -> String {
+        match self {
+            NightAnalysis::Skipped => "skipped".into(),
+            NightAnalysis::Future => "future".into(),
+            NightAnalysis::Analysis(results) => format!("{} permutations possible", results.len()),
+        }
+    }
+    pub fn print_night(&self, lines: &mut Vec<Text>, names: &[String]) {
+        match self {
             NightAnalysis::Skipped => {
                 lines.push("Night marked as skipped".into());
             }
@@ -69,14 +76,25 @@ impl BlockAnalysis {
                 lines.push("Night has no results listed".into());
             }
             NightAnalysis::Analysis(results) => {
+                let medal_colours = [
+                    Color::Rgb(175, 149, 0),
+                    Color::Rgb(180, 180, 180),
+                    Color::Rgb(173, 138, 86),
+                ];
+                let colour_iter = medal_colours.iter().chain(std::iter::repeat(&Color::White));
+                let max_len = names.iter().map(|n| n.len()).max().unwrap_or(0) + 1;
                 for (top_guys, (scores, _)) in results.iter() {
-                    let result_lines = Text::from_iter(
+                    let result_line = Line::from_iter(
                         top_guys
                             .iter()
                             .zip(scores)
-                            .map(|(&guy, &score)| format!("{}: {score}", names[guy])),
+                            .zip(colour_iter.clone())
+                            .map(|((&guy, &score), &color)| {
+                                Span::styled(format!("{:>max_len$}: {score:<3}", names[guy]), color)
+                            })
+                            .intersperse(Span::from("|")),
                     );
-                    lines.push(result_lines);
+                    lines.push(result_line.into());
                 }
             }
         }

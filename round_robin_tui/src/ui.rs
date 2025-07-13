@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders, Gauge, List, ListItem, ListState, Paragraph},
+    widgets::{Block, BorderType, Borders, Gauge, List, ListState, Paragraph},
 };
 use round_robin::results::ResultsTable;
 
@@ -60,10 +60,10 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
     match &mut app.state {
         AppState::BlocksEdit { editing, .. } => match editing {
             None => {
-                let mut list_items = Vec::<ListItem>::new();
+                let mut list_items = Vec::new();
 
-                for block in app.data.block.iter() {
-                    list_items.push(ListItem::new(Span::from(&block.name)));
+                for block in &app.data.block {
+                    list_items.push(Span::from(&block.name));
                 }
                 let list = List::new(list_items)
                     .block(Block::bordered())
@@ -90,7 +90,7 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
         } => match editing {
             None => {
                 let active_block = &app.data.block[app.selected_block];
-                let mut list_items = Vec::<ListItem>::new();
+                let mut list_items = Vec::new();
 
                 let longest_short = active_block
                     .competitors
@@ -100,20 +100,17 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
                     .unwrap_or(0)
                     + 4;
 
-                for (idx, (short_name, long_name)) in active_block.competitors.iter().enumerate() {
-                    let style = if idx == *competitor_index {
-                        Style::default().bg(Color::DarkGray)
-                    } else {
-                        Style::default()
-                    };
-                    list_items.push(ListItem::new(Line::styled(
-                        format!("{short_name:>longest_short$}: {long_name}"),
-                        style,
+                for (short_name, long_name) in &active_block.competitors {
+                    list_items.push(Span::from(format!(
+                        "{short_name:>longest_short$}: {long_name}"
                     )));
                 }
-                let list = List::new(list_items);
+                let list = List::new(list_items)
+                    .block(Block::bordered())
+                    .highlight_style(Style::new().bg(Color::DarkGray));
+                let mut state = ListState::default().with_selected(Some(*competitor_index));
 
-                frame.render_widget(list, chunks[1]);
+                frame.render_stateful_widget(list, chunks[1], &mut state);
             }
             Some((name, (short_name, long_name))) => {
                 let popup_block = Block::default()

@@ -79,7 +79,7 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
                     .style(Style::default().bg(Color::DarkGray));
                 let short_name_text = Paragraph::new(block_name.clone()).block(popup_block);
 
-                let area = centered_rect(60, 25, frame.area());
+                let area = centered_rect(60, 3, frame.area());
                 frame.render_widget(short_name_text, area);
             }
         },
@@ -113,24 +113,23 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
                 frame.render_stateful_widget(list, chunks[1], &mut state);
             }
             Some((name, (short_name, long_name))) => {
-                let popup_block = Block::default()
-                    .title("Edit Name")
-                    .borders(Borders::ALL)
-                    .style(Style::default().bg(Color::DarkGray));
+                let popup_block = Block::bordered()
+                    .title("Edit Name:")
+                    .style(Style::new().bg(Color::DarkGray));
 
-                let area = centered_rect(60, 25, frame.area());
+                let area = centered_rect(60, 5, frame.area());
                 frame.render_widget(popup_block, area);
 
                 let popup_chunks = Layout::default()
                     .direction(Direction::Horizontal)
                     .margin(1)
-                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                    .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
                     .split(area);
 
-                let mut short_block = Block::default().title("Short Name").borders(Borders::NONE);
-                let mut long_block = Block::default().title("Long Name").borders(Borders::NONE);
+                let mut short_block = Block::bordered().title("Short Name");
+                let mut long_block = Block::bordered().title("Long Name");
 
-                let active_style = Style::default().bg(Color::DarkGray);
+                let active_style = Style::default().bg(Color::Reset);
 
                 match name {
                     NameType::ShortName => short_block = short_block.style(active_style),
@@ -292,14 +291,14 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
 }
 
 /// helper function to create a centered rect using up certain percentage of the available rect `r`
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+fn centered_rect(percent_x: u16, height: u16, r: Rect) -> Rect {
     // Cut the given rectangle into three vertical pieces
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Fill(1),
+            Constraint::Length(height),
+            Constraint::Fill(1),
         ])
         .split(r);
 

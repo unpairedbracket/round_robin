@@ -115,7 +115,7 @@ impl AppState {
                 if *delete_warning {
                     "Delete block? This will result in loss of all the block's data (⌫  Delete)"
                 } else if editing.is_some() {
-                    "(⏎) Submit changes"
+                    "(⏎) Submit changes | (Esc) Reject changes"
                 } else {
                     "(▲ ▼) Select block | (Shift + ▲ ▼) Move block | (⏎) Edit name | (Ctrl + n) New block | (⌫ ) Delete block"
                 }
@@ -128,13 +128,13 @@ impl AppState {
                 if *delete_warning {
                     "Delete competitor? This will remove all match listings and results involving them (⌫  Delete)"
                 } else if editing.is_some() {
-                    "(◄ ►) Switch Short/Long name | (⏎) Submit changes"
+                    "(◄ ►) Switch Short/Long name | (⏎) Submit changes | (Esc) Reject changes"
                 } else {
                     "(▲ ▼) Select competitor | (Shift + ▲ ▼) Move competitor | (⏎) Edit name | (Ctrl + n) New competitor | (⌫ ) Delete competitor"
                 }
             }
             AppState::NightsAssign { .. } => {
-                "(◄ ▲ ▼ ►) Select match | (+) Move to later night | (-) Move to earlier night | (1-9) Set night | (⌫ ) Unassign night | (Shift + ▲ ▼) Select nights"
+                "(◄ ▲ ▼ ►) Select match | (-+) Move earlier/later | (1-9) Set night | (⌫ ) Unassign night | (Shift + ▲ ▼) Select nights"
             }
             AppState::ResultsEdit { .. } => {
                 "(◄ ▲ ▼ ►) Select match | (w) Win | (l) Loss | (d) Draw | (z) No-contest | (o) Reset | (Shift + ▲ ▼) Select nights"

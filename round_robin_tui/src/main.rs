@@ -204,6 +204,10 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                                 }
                                 continue;
                             }
+                            KeyCode::Esc => {
+                                // Skip the editing = Some(..) below
+                                continue;
+                            }
                             _ => {}
                         };
                         *editing = Some(edit_name);
@@ -305,11 +309,18 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                                 KeyCode::Backspace => {
                                     edit_name.pop();
                                 }
-                                KeyCode::Left | KeyCode::Right => {
+                                KeyCode::Left
+                                | KeyCode::Right
+                                | KeyCode::Tab
+                                | KeyCode::BackTab => {
                                     name_type = match name_type {
                                         NameType::LongName => NameType::ShortName,
                                         NameType::ShortName => NameType::LongName,
                                     };
+                                }
+                                KeyCode::Esc => {
+                                    // Skip the editing = Some(..) below
+                                    continue;
                                 }
                                 KeyCode::Enter => {
                                     match block.competitors.entry(short.clone()) {

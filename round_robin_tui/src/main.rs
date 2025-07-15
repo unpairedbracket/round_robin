@@ -153,7 +153,7 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                         }
                         KeyCode::Down if shift => {
                             *delete_warning = false;
-                            if app.data.block.len() < n_blocks - 1 {
+                            if app.selected_block < n_blocks - 1 {
                                 app.data
                                     .block
                                     .swap(app.selected_block, app.selected_block + 1);

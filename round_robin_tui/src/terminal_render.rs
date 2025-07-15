@@ -31,6 +31,7 @@ impl TerminalRenderBlock for TournamentBlock {
                     "  {name_a:>max_name_length$} vs. {name_b}"
                 )));
             }
+            lines.push(Line::from(""));
             texts.push(lines.into());
         }
         texts
@@ -67,6 +68,7 @@ impl TerminalRenderBlock for TournamentBlock {
                     Span::styled(name_b, right_colr),
                 ]));
             }
+            lines.push(Line::from(""));
             texts.push(lines.into());
         }
         texts

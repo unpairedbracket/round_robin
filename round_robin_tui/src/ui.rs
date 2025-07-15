@@ -85,6 +85,14 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
 
     frame.render_widget(block_widget, title_chunks[1]);
     match &mut app.state {
+        AppState::Quitting => {
+            let popup_block = Block::bordered()
+                .title("Quitting")
+                .style(Style::default().bg(Color::DarkGray));
+
+            let area = centered_rect(60, 5, frame.area());
+            frame.render_widget(Paragraph::new("Save file? (Y/N)").block(popup_block), area);
+        }
         AppState::BlocksEdit { editing, .. } => match editing {
             None => {
                 let mut list_items = Vec::new();
@@ -100,9 +108,8 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
                 frame.render_stateful_widget(list, chunks[1], &mut state);
             }
             Some(block_name) => {
-                let popup_block = Block::default()
+                let popup_block = Block::bordered()
                     .title("Edit Block Name")
-                    .borders(Borders::ALL)
                     .style(Style::default().bg(Color::DarkGray));
                 let short_name_text = Paragraph::new(block_name.clone()).block(popup_block);
 
@@ -279,7 +286,6 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
                 {
                     let progress = progress_bar.position();
                     let g = Gauge::default().ratio((progress as f64 / total as f64).clamp(0., 1.));
-                    // .block(Block::bordered().border_type(BorderType::Rounded));
                     let progress_chunks = Layout::default()
                         .direction(Direction::Vertical)
                         .constraints([Constraint::Length(3), Constraint::Fill(1)])

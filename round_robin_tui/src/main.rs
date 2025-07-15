@@ -43,10 +43,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = TournamentArgs::parse();
     let mut app = App::initialise_from_file(args.tournament_file);
 
-    let res = run_app(terminal, &mut app);
+    let should_save = run_app(terminal, &mut app);
 
     ratatui::restore();
-    res?;
+    if should_save? {
+        app.save().unwrap();
+    }
+
     Ok(())
 }
 
@@ -63,8 +66,10 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                 // Skip events that are not KeyEventKind::Press
                 continue;
             }
+            app.status_message = None;
             if let KeyCode::Char('q') = key.code {
-                return Ok(true);
+                app.state = AppState::Quitting;
+                continue;
             }
 
             let shift = key.modifiers.contains(KeyModifiers::SHIFT);
@@ -93,7 +98,12 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                         app.selected_block = (app.selected_block + 1) % app.data.block.len();
                         continue;
                     }
-                    KeyCode::Char('s') if ctrl => app.save().unwrap(),
+                    KeyCode::Char('s') if ctrl => {
+                        app.status_message = Some(match app.save() {
+                            Ok(()) => "Saved successfully".into(),
+                            Err(e) => format!("Save failed: {e}"),
+                        });
+                    }
                     _ => {}
                 }
             }
@@ -127,6 +137,17 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
             };
             let n_competitors = block.competitors.len();
             match &mut app.state {
+                AppState::Quitting => match key.code {
+                    KeyCode::Char('y') => return Ok(true),
+                    KeyCode::Char('n') => return Ok(false),
+                    KeyCode::Esc => {
+                        app.state = AppState::BlocksEdit {
+                            editing: None,
+                            delete_warning: false,
+                        }
+                    }
+                    _ => {}
+                },
                 AppState::BlocksEdit {
                     editing,
                     delete_warning,
@@ -330,7 +351,6 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                                             if existing_index == *competitor_index {
                                                 *old_long = long;
                                                 *editing = None;
-                                                app.status_message = None;
                                                 continue;
                                             } else {
                                                 app.status_message = Some(format!(

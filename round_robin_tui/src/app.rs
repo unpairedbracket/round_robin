@@ -65,6 +65,7 @@ impl App {
 }
 
 pub enum AppState {
+    Quitting,
     BlocksEdit {
         editing: Option<String>,
         delete_warning: bool,
@@ -99,6 +100,7 @@ impl Default for AppState {
 impl AppState {
     pub fn title(&self) -> &'static str {
         match self {
+            AppState::Quitting { .. } => "Quitting",
             AppState::BlocksEdit { .. } => "Add or Edit Blocks",
             AppState::CompetitorsEdit { .. } => "Edit Competitors",
             AppState::NightsAssign { .. } => "Assign Nights To Matches",
@@ -108,11 +110,11 @@ impl AppState {
     }
     pub fn prev_title(&self) -> Option<&'static str> {
         Some(match self {
-            AppState::BlocksEdit { .. } => None?,
             AppState::CompetitorsEdit { .. } => " (Shift + Tab) Add or Edit Blocks",
             AppState::NightsAssign { .. } => " (Shift + Tab) Edit Competitors",
             AppState::ResultsEdit { .. } => " (Shift + Tab) Assign Nights To Matches",
             AppState::Analysis { .. } => " (Shift + Tab) Edit Match Results",
+            _ => None?,
         })
     }
     pub fn next_title(&self) -> Option<&'static str> {
@@ -121,11 +123,14 @@ impl AppState {
             AppState::CompetitorsEdit { .. } => "Assign Nights To Matches (Tab) ",
             AppState::NightsAssign { .. } => "Edit Match Results (Tab) ",
             AppState::ResultsEdit { .. } => "Analyse Predictions (Tab) ",
-            AppState::Analysis { .. } => None?,
+            _ => None?,
         })
     }
     pub fn instructions(&self) -> &'static str {
         match self {
+            AppState::Quitting => {
+                "(Y) Save and quit | (N) Quit without saving | (Esc) Don't quit actually"
+            }
             AppState::BlocksEdit {
                 editing,
                 delete_warning,
@@ -166,6 +171,7 @@ impl AppState {
     pub fn forwards(&mut self) {
         use AppState::*;
         *self = match self {
+            Quitting => Quitting,
             BlocksEdit { .. } => CompetitorsEdit {
                 competitor_index: 0,
                 editing: None,
@@ -192,6 +198,7 @@ impl AppState {
     pub fn backwards(&mut self) {
         use AppState::*;
         *self = match self {
+            Quitting => Quitting,
             BlocksEdit { .. } => return,
             CompetitorsEdit { .. } => BlocksEdit {
                 editing: None,

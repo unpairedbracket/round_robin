@@ -315,7 +315,11 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
         app.status_message
             .as_deref()
             .unwrap_or(app.state.instructions()),
-        Style::default().fg(Color::Yellow),
+        if app.status_message.is_some() {
+            Color::Red
+        } else {
+            Color::Yellow
+        },
     )))
     .block(Block::default().borders(Borders::ALL));
     frame.render_widget(statusline_footer, footer_chunks[0]);

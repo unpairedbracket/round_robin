@@ -32,13 +32,40 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
     let title_block = Block::default()
         .borders(Borders::ALL)
         .style(Style::default());
+    frame.render_widget(title_block, title_chunks[0]);
+
+    let title_left_chunks = Layout::horizontal([
+        Constraint::Fill(1),
+        Constraint::Fill(1),
+        Constraint::Fill(1),
+    ])
+    .split(title_chunks[0]);
 
     let title_text = app.state.title();
 
-    let title = Paragraph::new(Text::styled(title_text, Style::default().fg(Color::Green)))
-        .block(title_block);
+    let title = Paragraph::new(
+        Span::styled(title_text, Style::default().fg(Color::Green)).into_centered_line(),
+    )
+    .block(Block::default().borders(Borders::TOP | Borders::BOTTOM));
+    frame.render_widget(title, title_left_chunks[1]);
 
-    frame.render_widget(title, title_chunks[0]);
+    if let Some(prev_title_text) = app.state.prev_title() {
+        let prev_title = Paragraph::new(
+            Span::styled(prev_title_text, Style::default().fg(Color::Green))
+                .into_left_aligned_line(),
+        )
+        .block(Block::default().borders(Borders::TOP | Borders::BOTTOM | Borders::LEFT));
+        frame.render_widget(prev_title, title_left_chunks[0]);
+    }
+
+    if let Some(next_title_text) = app.state.next_title() {
+        let next_title = Paragraph::new(
+            Span::styled(next_title_text, Style::default().fg(Color::Green))
+                .into_right_aligned_line(),
+        )
+        .block(Block::default().borders(Borders::TOP | Borders::BOTTOM | Borders::RIGHT));
+        frame.render_widget(next_title, title_left_chunks[2]);
+    }
 
     let active_block_name = if let AppState::BlocksEdit {
         editing: Some(current_name),

@@ -106,6 +106,24 @@ impl AppState {
             AppState::Analysis { .. } => "Analyse Predictions",
         }
     }
+    pub fn prev_title(&self) -> Option<&'static str> {
+        Some(match self {
+            AppState::BlocksEdit { .. } => None?,
+            AppState::CompetitorsEdit { .. } => " (Shift + Tab) Add or Edit Blocks",
+            AppState::NightsAssign { .. } => " (Shift + Tab) Edit Competitors",
+            AppState::ResultsEdit { .. } => " (Shift + Tab) Assign Nights To Matches",
+            AppState::Analysis { .. } => " (Shift + Tab) Edit Match Results",
+        })
+    }
+    pub fn next_title(&self) -> Option<&'static str> {
+        Some(match self {
+            AppState::BlocksEdit { .. } => "Edit Competitors (Tab) ",
+            AppState::CompetitorsEdit { .. } => "Assign Nights To Matches (Tab) ",
+            AppState::NightsAssign { .. } => "Edit Match Results (Tab) ",
+            AppState::ResultsEdit { .. } => "Analyse Predictions (Tab) ",
+            AppState::Analysis { .. } => None?,
+        })
+    }
     pub fn instructions(&self) -> &'static str {
         match self {
             AppState::BlocksEdit {

@@ -519,6 +519,13 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                     KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => {
                         update_cursor_no_diagonal(x_pos, y_pos, key.code, n_competitors);
                     }
+                    KeyCode::Delete | KeyCode::Backspace => {
+                        if let Some((night, match_number, _)) =
+                            block.find_result_by_indices(*y_pos, *x_pos)
+                        {
+                            block.nights[night].results[match_number] = MatchResult::None;
+                        };
+                    }
                     KeyCode::Char(c) => {
                         if let Ok(result) = MatchResult::try_from(c) {
                             if matches!(result, MatchResult::SelfMatch) {

@@ -394,7 +394,6 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                             let night = &mut block.nights[current_night];
                             let moved_match = night.matches.remove(match_index);
                             let moved_result = night.results.remove(match_index);
-                            let should_remove = night.matches.is_empty();
                             let new_night =
                                 if let Some(night) = block.nights.get_mut(current_night + 1) {
                                     night
@@ -404,9 +403,6 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                                 };
                             new_night.matches.push(moved_match);
                             new_night.results.push(moved_result);
-                            if should_remove {
-                                block.nights.remove(current_night);
-                            }
                         } else {
                             let Some((a, _)) = block.competitors.get_index(*y_pos) else {
                                 continue;
@@ -433,14 +429,20 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                             let night = &mut block.nights[current_night];
                             let moved_match = night.matches.remove(match_index);
                             let moved_result = night.results.remove(match_index);
-                            let should_remove = night.matches.is_empty();
+                            let night_is_last = current_night + 1 >= block.nights.len();
                             if current_night > 0 {
                                 let new_night = &mut block.nights[current_night - 1];
                                 new_night.matches.push(moved_match);
                                 new_night.results.push(moved_result);
                             }
-                            if should_remove {
-                                block.nights.remove(current_night);
+                            if night_is_last {
+                                while let Some(last_night) = block.nights.last()
+                                    && last_night.matches.len() == 0
+                                {
+                                    if block.nights.pop().is_none() {
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
@@ -451,10 +453,16 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                             let night = &mut block.nights[current_night];
                             let _moved_match = night.matches.remove(match_index);
                             let _moved_result = night.results.remove(match_index);
-                            let should_remove = night.matches.is_empty();
+                            let night_is_last = current_night + 1 >= block.nights.len();
 
-                            if should_remove {
-                                block.nights.remove(current_night);
+                            if night_is_last {
+                                while let Some(last_night) = block.nights.last()
+                                    && last_night.matches.len() == 0
+                                {
+                                    if block.nights.pop().is_none() {
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
@@ -467,19 +475,26 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                                 let night = &mut block.nights[current_night];
                                 let moved_match = night.matches.remove(match_index);
                                 let moved_result = night.results.remove(match_index);
-                                let should_remove = night.matches.is_empty();
+                                let night_is_last = current_night + 1 >= block.nights.len();
                                 let new_night =
                                     if let Some(night) = block.nights.get_mut(target_night) {
                                         night
                                     } else {
-                                        let old_len = block.nights.len();
-                                        block.nights.push(MatchSet::default());
-                                        &mut block.nights[old_len]
+                                        while block.nights.len() <= target_night {
+                                            block.nights.push(MatchSet::default());
+                                        }
+                                        block.nights.last_mut().unwrap()
                                     };
                                 new_night.matches.push(moved_match);
                                 new_night.results.push(moved_result);
-                                if should_remove {
-                                    block.nights.remove(current_night);
+                                if night_is_last {
+                                    while let Some(last_night) = block.nights.last()
+                                        && last_night.matches.len() == 0
+                                    {
+                                        if block.nights.pop().is_none() {
+                                            break;
+                                        }
+                                    }
                                 }
                             } else {
                                 let Some((a, _)) = block.competitors.get_index(*y_pos) else {
@@ -494,9 +509,10 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                                     if let Some(night) = block.nights.get_mut(target_night) {
                                         night
                                     } else {
-                                        let old_len = block.nights.len();
-                                        block.nights.push(MatchSet::default());
-                                        &mut block.nights[old_len]
+                                        while block.nights.len() <= target_night {
+                                            block.nights.push(MatchSet::default());
+                                        }
+                                        block.nights.last_mut().unwrap()
                                     };
                                 new_night.matches.push(moved_match);
                                 new_night.results.push(moved_result);

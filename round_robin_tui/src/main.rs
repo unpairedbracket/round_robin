@@ -37,10 +37,10 @@ use crate::{
 
 fn main() -> Result<(), Box<dyn Error>> {
     color_eyre::install()?;
-    let terminal = ratatui::init();
+    let args = TournamentArgs::parse();
 
     // create app and run it
-    let args = TournamentArgs::parse();
+    let terminal = ratatui::init();
     let mut app = App::initialise_from_file(args.tournament_file);
 
     let should_save = run_app(terminal, &mut app);

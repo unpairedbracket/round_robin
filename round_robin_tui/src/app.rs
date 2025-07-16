@@ -110,19 +110,19 @@ impl AppState {
     }
     pub fn prev_title(&self) -> Option<&'static str> {
         Some(match self {
-            AppState::CompetitorsEdit { .. } => " (Shift + Tab) Add or Edit Blocks",
-            AppState::NightsAssign { .. } => " (Shift + Tab) Edit Competitors",
-            AppState::ResultsEdit { .. } => " (Shift + Tab) Assign Nights To Matches",
-            AppState::Analysis { .. } => " (Shift + Tab) Edit Match Results",
+            AppState::CompetitorsEdit { .. } => " (Shift + Tab) Blocks",
+            AppState::NightsAssign { .. } => " (Shift + Tab) Competitors",
+            AppState::ResultsEdit { .. } => " (Shift + Tab) Schedule",
+            AppState::Analysis { .. } => " (Shift + Tab) Results",
             _ => None?,
         })
     }
     pub fn next_title(&self) -> Option<&'static str> {
         Some(match self {
-            AppState::BlocksEdit { .. } => "Edit Competitors (Tab) ",
-            AppState::CompetitorsEdit { .. } => "Assign Nights To Matches (Tab) ",
-            AppState::NightsAssign { .. } => "Edit Match Results (Tab) ",
-            AppState::ResultsEdit { .. } => "Analyse Predictions (Tab) ",
+            AppState::BlocksEdit { .. } => "Competitors (Tab) ",
+            AppState::CompetitorsEdit { .. } => "Schedule (Tab) ",
+            AppState::NightsAssign { .. } => "Results (Tab) ",
+            AppState::ResultsEdit { .. } => "Analysis (Tab) ",
             _ => None?,
         })
     }

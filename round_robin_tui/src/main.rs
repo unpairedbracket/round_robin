@@ -136,6 +136,7 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                 continue;
             };
             let n_competitors = block.competitors.len();
+
             match &mut app.state {
                 AppState::Quitting => match key.code {
                     KeyCode::Char('y') => return Ok(true),
@@ -240,84 +241,73 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                     delete_warning,
                 } => {
                     match editing.take() {
-                        None => {
-                            match key.code {
-                                KeyCode::Down if !shift => {
-                                    *delete_warning = false;
-                                    *competitor_index = (*competitor_index + 1) % n_competitors;
-                                    continue;
-                                }
-                                KeyCode::Up if !shift => {
-                                    *delete_warning = false;
-                                    *competitor_index =
-                                        (*competitor_index + n_competitors - 1) % n_competitors;
-                                    continue;
-                                }
-                                KeyCode::Up if shift => {
-                                    *delete_warning = false;
-                                    if *competitor_index > 0 {
-                                        block
-                                            .competitors
-                                            .swap_indices(*competitor_index, *competitor_index - 1);
-                                        *competitor_index -= 1;
-                                    }
-                                }
-                                KeyCode::Down if shift => {
-                                    *delete_warning = false;
-                                    if *competitor_index < n_competitors - 1 {
-                                        block
-                                            .competitors
-                                            .swap_indices(*competitor_index, *competitor_index + 1);
-                                        *competitor_index += 1;
-                                    }
-                                }
-
-                                KeyCode::Char('n') if ctrl => {
-                                    *delete_warning = false;
-                                    // let (new_idx, None) = block.competitors.insert_full(
-                                    //     "..".to_owned(),
-                                    //     "New Competitor".to_owned(),
-                                    // ) else {
-                                    //     app.status_message = Some("Error: Cannot create new competitor while a competitor has the short name '..'. This short name is reserved.".into());
-                                    //     continue;
-                                    // };
-                                    *competitor_index = block.competitors.len();
-                                    *editing = Some((
-                                        NameType::LongName,
-                                        ("..".to_owned(), "New Competitor".to_owned()),
-                                    ));
-                                }
-
-                                KeyCode::Enter => {
-                                    *delete_warning = false;
-                                    if let Some((short, long)) =
-                                        block.competitors.get_index(*competitor_index)
-                                    {
-                                        *editing = Some((
-                                            NameType::LongName,
-                                            (short.clone(), long.clone()),
-                                        ));
-                                    }
-                                }
-
-                                KeyCode::Delete | KeyCode::Backspace => {
-                                    if *delete_warning {
-                                        if let Some((short, _long)) =
-                                            block.competitors.shift_remove_index(*competitor_index)
-                                        {
-                                            block.remove_competitor(&short);
-                                        }
-                                        if *competitor_index >= block.competitors.len() {
-                                            *competitor_index = block.competitors.len() - 1;
-                                        }
-                                        *delete_warning = false;
-                                    } else {
-                                        *delete_warning = true;
-                                    }
-                                }
-                                _ => {}
+                        None => match key.code {
+                            KeyCode::Down if !shift => {
+                                *delete_warning = false;
+                                *competitor_index = (*competitor_index + 1) % n_competitors;
+                                continue;
                             }
-                        }
+                            KeyCode::Up if !shift => {
+                                *delete_warning = false;
+                                *competitor_index =
+                                    (*competitor_index + n_competitors - 1) % n_competitors;
+                                continue;
+                            }
+                            KeyCode::Up if shift => {
+                                *delete_warning = false;
+                                if *competitor_index > 0 {
+                                    block
+                                        .competitors
+                                        .swap_indices(*competitor_index, *competitor_index - 1);
+                                    *competitor_index -= 1;
+                                }
+                            }
+                            KeyCode::Down if shift => {
+                                *delete_warning = false;
+                                if *competitor_index < n_competitors - 1 {
+                                    block
+                                        .competitors
+                                        .swap_indices(*competitor_index, *competitor_index + 1);
+                                    *competitor_index += 1;
+                                }
+                            }
+
+                            KeyCode::Char('n') if ctrl => {
+                                *delete_warning = false;
+                                *competitor_index = block.competitors.len();
+                                *editing = Some((
+                                    NameType::LongName,
+                                    ("..".to_owned(), "New Competitor".to_owned()),
+                                ));
+                            }
+
+                            KeyCode::Enter => {
+                                *delete_warning = false;
+                                if let Some((short, long)) =
+                                    block.competitors.get_index(*competitor_index)
+                                {
+                                    *editing =
+                                        Some((NameType::LongName, (short.clone(), long.clone())));
+                                }
+                            }
+
+                            KeyCode::Delete | KeyCode::Backspace => {
+                                if *delete_warning {
+                                    if let Some((short, _long)) =
+                                        block.competitors.shift_remove_index(*competitor_index)
+                                    {
+                                        block.remove_competitor(&short);
+                                    }
+                                    if *competitor_index >= block.competitors.len() {
+                                        *competitor_index = block.competitors.len() - 1;
+                                    }
+                                    *delete_warning = false;
+                                } else {
+                                    *delete_warning = true;
+                                }
+                            }
+                            _ => {}
+                        },
                         Some((mut name_type, (mut short, mut long))) => {
                             let edit_name = match name_type {
                                 NameType::ShortName => &mut short,
@@ -374,33 +364,6 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                                             continue;
                                         }
                                     }
-
-                                    // if let Some((existing_index, _, old_long)) =
-                                    //     block.competitors.get_full_mut(&short)
-                                    // {
-                                    //     if existing_index == *competitor_index {
-                                    //         *old_long = long;
-                                    //         *editing = None;
-                                    //         app.status_message = None;
-                                    //         continue;
-                                    //     } else {
-                                    //         app.status_message = Some(format!(
-                                    //             "Entered short name clashes with {old_long}. Please select a different short name for {long}"
-                                    //         ))
-                                    //     }
-                                    // } else {
-                                    //     let None = block.competitors.insert(short.clone(), long)
-                                    //     else {
-                                    //         panic!("nooo")
-                                    //     };
-                                    //     let (old_short, _old_long) = block
-                                    //         .competitors
-                                    //         .swap_remove_index(*competitor_index)
-                                    //         .expect("competitors contains item");
-                                    //     block.relabel_competitor(&old_short, &short);
-                                    //     *editing = None;
-                                    //     continue;
-                                    // }
                                 }
                                 _ => {}
                             }

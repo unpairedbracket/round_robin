@@ -241,13 +241,22 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
                         .split(chunks[1]);
                     frame.render_stateful_widget(
                         List::new(possible_results)
-                            .block(Block::bordered().border_type(BorderType::Rounded).title(
-                                format!(
-                                    "After night {}: {}",
-                                    1 + *night_number,
-                                    night_analysis.summary()
-                                ),
-                            ))
+                            .block(
+                                Block::bordered()
+                                    .border_type(BorderType::Rounded)
+                                    .title(format!(
+                                        "After night {}: {}",
+                                        1 + *night_number,
+                                        night_analysis.summary()
+                                    ))
+                                    .title(
+                                        Line::from(format!(
+                                            "(For {} winners)",
+                                            app.data.number_advance
+                                        ))
+                                        .right_aligned(),
+                                    ),
+                            )
                             .highlight_style(Style::default().bg(Color::DarkGray)),
                         main_chunks[0],
                         list_state,
@@ -276,7 +285,11 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
                 } else {
                     let instructions = Block::bordered()
                         .border_type(BorderType::Rounded)
-                        .title("Press Enter to run Analysis");
+                        .title("Press Enter to run Analysis")
+                        .title(
+                            Line::from(format!("(For {} winners)", app.data.number_advance))
+                                .right_aligned(),
+                        );
                     frame.render_widget(instructions, chunks[1]);
                 }
             }

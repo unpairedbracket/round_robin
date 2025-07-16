@@ -648,6 +648,16 @@ fn run_app<B: Backend>(mut terminal: Terminal<B>, app: &mut App) -> io::Result<b
                             list_state.select(None);
                         }
                     }
+                    KeyCode::Char('+') | KeyCode::Char('=') => {
+                        if app.data.number_advance < n_competitors {
+                            app.data.number_advance += 1;
+                        }
+                    }
+                    KeyCode::Char('-') | KeyCode::Char('_') => {
+                        if app.data.number_advance > 1 {
+                            app.data.number_advance -= 1;
+                        }
+                    }
                     _ => {}
                 },
             };

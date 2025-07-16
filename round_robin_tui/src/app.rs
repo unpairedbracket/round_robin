@@ -163,7 +163,7 @@ impl AppState {
                 "(◄ ▲ ▼ ►) Select match | (w) Win | (l) Loss | (d) Draw | (z) No-contest | (o) Reset | (Shift + ▲ ▼) Select nights"
             }
             AppState::Analysis { .. } => {
-                "(⏎) Run analysis | (◄ ►) Change night | (▲ ▼) Scroll results | (⌫ ) Return to results table so far"
+                "(⏎) Run analysis | (◄ ►) Change night | (▲ ▼) Scroll results | (⌫ ) Return to results table so far | (+-) Change number of winners"
             }
         }
     }

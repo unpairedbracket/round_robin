@@ -67,6 +67,7 @@ impl NightAnalysis {
             NightAnalysis::Analysis(results) => format!("{} permutations possible", results.len()),
         }
     }
+
     pub fn print_night(&self, lines: &mut Vec<Text>, names: &[String]) {
         match self {
             NightAnalysis::Skipped => {
@@ -99,4 +100,30 @@ impl NightAnalysis {
             }
         }
     }
+
+    pub fn best_positions(&self, n: usize) -> Vec<usize> {
+        let mut result = vec![usize::MAX; n];
+
+        if let NightAnalysis::Analysis(results) = self {
+            for (top_guys, _) in results {
+                for (place, &guy) in top_guys.iter().enumerate() {
+                    if result[guy] > place {
+                        result[guy] = place
+                    }
+                }
+            }
+        }
+
+        result
+    }
+}
+
+pub fn colour_for_position(n: usize) -> Color {
+    const MEDAL_COLOURS: [Color; 3] = [
+        Color::Rgb(175, 149, 0),
+        Color::Rgb(180, 180, 180),
+        Color::Rgb(173, 138, 86),
+    ];
+
+    MEDAL_COLOURS.get(n).copied().unwrap_or(Color::LightRed)
 }

@@ -13,6 +13,7 @@ pub struct ResultsGrid<'a> {
     pub results: &'a ResultsTable,
     pub competitors: &'a IndexMap<String, String>,
     pub positions: &'a [(usize, usize)],
+    pub name_styles: Vec<Color>,
 }
 
 impl Widget for ResultsGrid<'_> {
@@ -46,7 +47,12 @@ impl Widget for ResultsGrid<'_> {
                 }
             } else {
                 let long_name = self.competitors.get(&short_names[idx - 1]).unwrap();
-                Paragraph::new(Span::from(long_name).into_right_aligned_line())
+                let style = self
+                    .name_styles
+                    .get(idx - 1)
+                    .copied()
+                    .unwrap_or(Color::White);
+                Paragraph::new(Span::styled(long_name, style).into_right_aligned_line())
                     .block(Block::bordered().border_set(border::EMPTY))
                     .render(*name_cell, buf);
 

@@ -8,7 +8,7 @@ use ratatui::{
 use round_robin::results::ResultsTable;
 
 use crate::{
-    analysis::NightAnalysis,
+    analysis::{NightAnalysis, colour_for_position},
     app::{AnalysisState, App, AppState, NameType},
     nights_grid::NightsGrid,
     results_grid::ResultsGrid,
@@ -213,6 +213,7 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
                 results: &results_table,
                 competitors: &active_block.competitors,
                 positions: &[(*x, *y)],
+                name_styles: Default::default(),
             };
             frame.render_stateful_widget(
                 List::new(active_block.render_results())
@@ -275,10 +276,16 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
                         &results_table
                     };
                     let different_positions = results_table.diff_indices(new_results_table);
+                    let best_positions =
+                        night_analysis.best_positions(active_block.competitors.len());
                     let grid = ResultsGrid {
                         results: new_results_table,
                         competitors: &active_block.competitors,
                         positions: &different_positions,
+                        name_styles: best_positions
+                            .iter()
+                            .map(|&pos| colour_for_position(pos))
+                            .collect(),
                     };
 
                     frame.render_widget(grid, main_chunks[1]);
